@@ -1,74 +1,125 @@
-import React, { forwardRef, memo } from 'react'
+import React, { Component } from 'react'
+import PropTypes from 'prop-types'
 import {
     View,
     Image,
     NativeModules,
     requireNativeComponent,
+    ViewPropTypes,
     StyleSheet,
 } from 'react-native'
 
 const FastImageViewNativeModule = NativeModules.FastImageView
 
-function FastImageBase({
-    source,
-    tintColor,
-    onLoadStart,
-    onProgress,
-    onLoad,
-    onError,
-    onLoadEnd,
-    style,
-    children,
-    fallback,
-    forwardedRef,
-    ...props
-}) {
-    const resolvedSource = Image.resolveAssetSource(source)
+class FastImage extends Component {
+    componentDidMount() {
+        this.runTimer()
+    }
 
-    if (fallback) {
+    componentDidUpdate(prevProps) {
+        if (this.props.source.uri !== prevProps.source.uri) {
+            this.setState({
+                loaded: false,
+                error: null,
+                expired: false,
+            })
+
+            this.runTimer()
+        }
+    }
+
+    componentWillUnmount() {
+        clearTimeout(this.timeout)
+    }
+
+    runTimer() {
+        this.timeout = setTimeout(() => {
+            this.setState({ expired: true })
+        }, 1000)
+    }
+
+    state = {
+        loaded: false,
+        error: null,
+        expired: false,
+    }
+
+    setNativeProps(nativeProps) {
+        this._root.setNativeProps(nativeProps)
+    }
+
+    captureRef = e => (this._root = e)
+
+    render() {
+        const {
+            source,
+            onLoadStart,
+            onProgress,
+            onLoad,
+            onError,
+            onLoadEnd,
+            style,
+            children,
+            fallback,
+            placeholder,
+            ...props
+        } = this.props
+
+        const { expired, loaded, error } = this.state
+        const resolvedSource = Image.resolveAssetSource(source)
+
+        if (fallback) {
+            return (
+                <View
+                    style={[styles.imageContainer, style]}
+                    ref={this.captureRef}
+                >
+                    {expired && (!loaded || error) && placeholder}
+                    <FastImageView
+                        {...props}
+                        style={StyleSheet.absoluteFill}
+                        source={resolvedSource}
+                        onLoadStart={onLoadStart}
+                        onProgress={onProgress}
+                        onLoad={onLoad}
+                        onError={onError}
+                        onLoadEnd={onLoadEnd}
+                    />
+                    {children}
+                </View>
+            )
+        }
+
         return (
-            <View style={[styles.imageContainer, style]} ref={forwardedRef}>
-                <Image
+            <View style={[styles.imageContainer, style]} ref={this.captureRef}>
+                {expired && (!loaded || error) && placeholder}
+                <FastImageView
                     {...props}
-                    tintColor={tintColor}
                     style={StyleSheet.absoluteFill}
                     source={resolvedSource}
-                    onLoadStart={onLoadStart}
-                    onProgress={onProgress}
-                    onLoad={onLoad}
-                    onError={onError}
-                    onLoadEnd={onLoadEnd}
+                    onFastImageLoadStart={onLoadStart}
+                    onFastImageProgress={onProgress}
+                    onFastImageLoad={onLoad}
+                    onFastImageError={data => {
+                        this.setState({
+                            error: true,
+                        })
+
+                        onError(data)
+                    }}
+                    onFastImageLoadEnd={data => {
+                        this.setState({
+                            loaded: true,
+                        })
+
+                        onLoadEnd(data)
+                    }}
                 />
                 {children}
             </View>
         )
     }
-
-    return (
-        <View style={[styles.imageContainer, style]} ref={forwardedRef}>
-            <FastImageView
-                {...props}
-                tintColor={tintColor}
-                style={StyleSheet.absoluteFill}
-                source={resolvedSource}
-                onFastImageLoadStart={onLoadStart}
-                onFastImageProgress={onProgress}
-                onFastImageLoad={onLoad}
-                onFastImageError={onError}
-                onFastImageLoadEnd={onLoadEnd}
-            />
-            {children}
-        </View>
-    )
 }
-
-const FastImageMemo = memo(FastImageBase)
-
-const FastImage = forwardRef((props, ref) => (
-    <FastImageMemo forwardedRef={ref} {...props} />
-))
-
-FastImage.displayName = 'FastImage'
 
 const styles = StyleSheet.create({
     imageContainer: {
@@ -107,6 +158,30 @@ FastImage.preload = sources => {
 
 FastImage.defaultProps = {
     resizeMode: FastImage.resizeMode.cover,
+    onLoadStart: () => {},
+    onProgress: () => {},
+    onLoad: () => {},
+    onError: () => {},
+    onLoadEnd: () => {},
+}
+
+const FastImageSourcePropType = PropTypes.shape({
+    uri: PropTypes.string,
+    headers: PropTypes.objectOf(PropTypes.string),
+    priority: PropTypes.oneOf(Object.keys(FastImage.priority)),
+    cache: PropTypes.oneOf(Object.keys(FastImage.cacheControl)),
+})
+
+FastImage.propTypes = {
+    ...ViewPropTypes,
+    source: PropTypes.oneOfType([FastImageSourcePropType, PropTypes.number]),
+    onLoadStart: PropTypes.func,
+    onProgress: PropTypes.func,
+    onLoad: PropTypes.func,
+    onError: PropTypes.func,
+    onLoadEnd: PropTypes.func,
+    fallback: PropTypes.bool,
+    placeholder: PropTypes.node,
 }
 
 const FastImageView = requireNativeComponent('FastImageView', FastImage, {

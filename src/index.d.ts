@@ -82,6 +82,7 @@ export interface OnProgressEvent {
 
 export interface FastImageProperties {
     source: FastImageSource | number
+    placeholder?: React.ReactNode
     resizeMode?: FastImage.ResizeMode
     fallback?: boolean
 
@@ -109,14 +110,6 @@ export interface FastImageProperties {
      * Style
      */
     style?: StyleProp<ImageStyle>
-
-    /**
-     * TintColor
-     *
-     * If supplied, changes the color of all the non-transparent pixels to the given color.
-     */
-
-    tintColor?: number | string
 
     /**
      * A unique identifier for this element to be used in UI Automation testing scripts.
